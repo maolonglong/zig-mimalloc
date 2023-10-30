@@ -51,7 +51,7 @@ pub fn main() !void {
     const max_depth = if (min_depth + 2 > n) min_depth + 2 else n;
     const stretch_depth = max_depth + 1;
 
-    const allocator = mimalloc.allocator;
+    const allocator = mimalloc.default_allocator;
 
     {
         var tree = bottomUpTree(allocator, stretch_depth).?;

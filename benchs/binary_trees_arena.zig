@@ -41,7 +41,7 @@ pub fn main() !void {
     const max_depth = if (min_depth + 2 > n) min_depth + 2 else n;
     const stretch_depth = max_depth + 1;
 
-    var arena = std.heap.ArenaAllocator.init(mimalloc.allocator);
+    var arena = std.heap.ArenaAllocator.init(mimalloc.default_allocator);
     defer arena.deinit();
 
     {
@@ -50,7 +50,7 @@ pub fn main() !void {
         _ = arena.reset(.retain_capacity);
     }
 
-    var long_lived_arena = std.heap.ArenaAllocator.init(mimalloc.allocator);
+    var long_lived_arena = std.heap.ArenaAllocator.init(mimalloc.default_allocator);
     defer long_lived_arena.deinit();
     var long_lived_tree = bottomUpTree(long_lived_arena.allocator(), max_depth).?;
 

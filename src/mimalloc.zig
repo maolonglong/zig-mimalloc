@@ -1,10 +1,11 @@
 const std = @import("std");
 const testing = std.testing;
 const heap = std.heap;
-const c = @cImport(@cInclude("mimalloc.h"));
 const Allocator = std.mem.Allocator;
 
-pub const allocator = Allocator{
+pub const raw = @cImport(@cInclude("mimalloc.h"));
+
+pub const default_allocator = Allocator{
     .ptr = undefined,
     .vtable = &.{
         .alloc = alloc,
@@ -23,7 +24,7 @@ fn alloc(
     _ = ret_addr;
 
     const ptr_align = @as(usize, 1) << @as(Allocator.Log2Align, @intCast(log2_ptr_align));
-    return @as(?[*]u8, @ptrCast(c.mi_malloc_aligned(len, ptr_align)));
+    return @as(?[*]u8, @ptrCast(raw.mi_malloc_aligned(len, ptr_align)));
 }
 
 fn resize(
@@ -37,7 +38,7 @@ fn resize(
     _ = log2_buf_align;
     _ = ret_addr;
 
-    const len = c.mi_usable_size(buf.ptr);
+    const len = raw.mi_usable_size(buf.ptr);
 
     // Reallocation still fits, is aligned and not more than 50% waste.
     return new_len <= len and new_len >= (len - (len / 2));
@@ -53,12 +54,12 @@ fn free(
     _ = ret_addr;
 
     const buf_align = @as(usize, 1) << @as(Allocator.Log2Align, @intCast(log2_buf_align));
-    c.mi_free_size_aligned(buf.ptr, buf.len, buf_align);
+    raw.mi_free_size_aligned(buf.ptr, buf.len, buf_align);
 }
 
 test "mimalloc" {
-    try heap.testAllocator(allocator);
-    try heap.testAllocatorAligned(allocator);
-    try heap.testAllocatorLargeAlignment(allocator);
-    try heap.testAllocatorAlignedShrink(allocator);
+    try heap.testAllocator(default_allocator);
+    try heap.testAllocatorAligned(default_allocator);
+    try heap.testAllocatorLargeAlignment(default_allocator);
+    try heap.testAllocatorAlignedShrink(default_allocator);
 }

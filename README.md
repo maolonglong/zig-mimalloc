@@ -40,7 +40,7 @@ const std = @import("std");
 const mimalloc = @import("mimalloc");
 
 pub fn main() !void {
-    var a = std.ArrayList(usize).init(mimalloc.allocator);
+    var a = std.ArrayList(usize).init(mimalloc.default_allocator);
     defer a.deinit();
 
     for (0..100) |i| {

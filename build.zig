@@ -4,6 +4,8 @@ pub fn build(b: *std.Build) void {
     const target = b.standardTargetOptions(.{});
     const optimize = b.standardOptimizeOption(.{});
 
+    const enable_secure_mode = b.option(bool, "secure", "Use full security mitigations (like guard pages, allocation randomization, double-free mitigation, and free-list corruption detection)") orelse false;
+
     const mimalloc_mod = b.addModule("mimalloc", .{
         .source_file = .{ .path = "src/mimalloc.zig" },
     });
@@ -17,6 +19,9 @@ pub fn build(b: *std.Build) void {
     lib.addIncludePath(.{ .path = "c_src/mimalloc/include" });
     lib.addCSourceFile(.{ .file = .{ .path = "c_src/mimalloc/src/static.c" }, .flags = &.{} });
     lib.installHeader("c_src/mimalloc/include/mimalloc.h", "mimalloc.h");
+    if (enable_secure_mode) {
+        lib.defineCMacro("MI_SECURE", "4");
+    }
     b.installArtifact(lib);
 
     const main_tests = b.addTest(.{

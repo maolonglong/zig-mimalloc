@@ -41,18 +41,16 @@ pub fn main() !void {
     const max_depth = if (min_depth + 2 > n) min_depth + 2 else n;
     const stretch_depth = max_depth + 1;
 
-    var arena = std.heap.ArenaAllocator.init(mimalloc.default_allocator);
-    defer arena.deinit();
-
     {
-        var tree = bottomUpTree(arena.allocator(), stretch_depth).?;
+        var heap = try mimalloc.Heap.new();
+        var tree = bottomUpTree(heap.allocator(), stretch_depth).?;
         std.debug.print("stretch tree of depth {}\t check: {}\n", .{ stretch_depth, itemCheck(tree) });
-        _ = arena.reset(.retain_capacity);
+        heap.destroy();
     }
 
-    var long_lived_arena = std.heap.ArenaAllocator.init(mimalloc.default_allocator);
-    defer long_lived_arena.deinit();
-    var long_lived_tree = bottomUpTree(long_lived_arena.allocator(), max_depth).?;
+    var long_lived_heap = try mimalloc.Heap.new();
+    defer long_lived_heap.destroy();
+    var long_lived_tree = bottomUpTree(long_lived_heap.allocator(), max_depth).?;
 
     var depth: i32 = min_depth;
     while (depth <= max_depth) : (depth += 2) {
@@ -60,9 +58,10 @@ pub fn main() !void {
         var check: i32 = 0;
 
         for (0..iterations) |_| {
-            var tree = bottomUpTree(arena.allocator(), depth).?;
+            var heap = try mimalloc.Heap.new();
+            var tree = bottomUpTree(heap.allocator(), depth).?;
             check += itemCheck(tree);
-            _ = arena.reset(.retain_capacity);
+            heap.destroy();
         }
         std.debug.print("{}\t trees of depth {}\t check: {}\n", .{ iterations, depth, check });
     }

@@ -1,7 +1,5 @@
 const std = @import("std");
-const builtin = @import("builtin");
 const testing = std.testing;
-const log = std.log.scoped(.mimalloc);
 const Allocator = std.mem.Allocator;
 
 pub const raw = @cImport(@cInclude("mimalloc.h"));
@@ -58,45 +56,65 @@ fn free(
     raw.mi_free_size_aligned(buf.ptr, buf.len, buf_align);
 }
 
-/// Emits log messages for leaks and then returns whether there were any leaks.
-pub fn detectLeaks(heap: ?*const raw.mi_heap_t) bool {
-    const Closure = struct {
-        leaks: bool = false,
+pub const Heap = struct {
+    const Self = @This();
 
-        fn visitor(
-            _: ?*const raw.mi_heap_t,
-            _: [*c]const raw.mi_heap_area_t,
-            block: ?*anyopaque,
-            _: usize,
-            ctx: ?*anyopaque,
-        ) callconv(.C) bool {
-            const self: *@This() = @ptrCast(@alignCast(ctx.?));
-            if (block) |ptr| {
-                if (!builtin.is_test) {
-                    // TODO: stack trace
-                    log.err("memory address 0x{x} leaked", .{@intFromPtr(ptr)});
-                }
-                self.leaks = true;
-            }
-            return true;
-        }
-    };
+    inner: *raw.mi_heap_t,
 
-    var closure = Closure{};
-    _ = raw.mi_heap_visit_blocks(heap, true, Closure.visitor, &closure);
-    return closure.leaks;
-}
+    pub fn new() !Self {
+        return .{
+            .inner = raw.mi_heap_new() orelse return error.OutOfMemory,
+        };
+    }
 
-test "mimalloc" {
+    pub fn delete(self: *Self) void {
+        raw.mi_heap_delete(self.inner);
+    }
+
+    pub fn destroy(self: *Self) void {
+        raw.mi_heap_destroy(self.inner);
+    }
+
+    pub fn allocator(self: *Self) Allocator {
+        return .{
+            .ptr = self,
+            .vtable = &.{
+                .alloc = heapAlloc,
+                .resize = resize,
+                .free = free,
+            },
+        };
+    }
+
+    fn heapAlloc(
+        ctx: *anyopaque,
+        len: usize,
+        log2_ptr_align: u8,
+        ret_addr: usize,
+    ) ?[*]u8 {
+        _ = ret_addr;
+
+        const self: *Self = @ptrCast(@alignCast(ctx));
+
+        const ptr_align = @as(usize, 1) << @as(Allocator.Log2Align, @intCast(log2_ptr_align));
+        return @as(?[*]u8, @ptrCast(raw.mi_heap_malloc_aligned(self.inner, len, ptr_align)));
+    }
+};
+
+test "default_allocator" {
     try std.heap.testAllocator(default_allocator);
     try std.heap.testAllocatorAligned(default_allocator);
     try std.heap.testAllocatorLargeAlignment(default_allocator);
     try std.heap.testAllocatorAlignedShrink(default_allocator);
 }
 
-test "detectLeaks" {
-    const memory = try default_allocator.alloc(u8, 1);
-    try testing.expect(detectLeaks(raw.mi_heap_get_default()));
-    default_allocator.free(memory);
-    try testing.expect(!detectLeaks(raw.mi_heap_get_default()));
+test "heap allocator" {
+    var heap = try Heap.new();
+    defer heap.destroy();
+    const allocator = heap.allocator();
+
+    try std.heap.testAllocator(allocator);
+    try std.heap.testAllocatorAligned(allocator);
+    try std.heap.testAllocatorLargeAlignment(allocator);
+    try std.heap.testAllocatorAlignedShrink(allocator);
 }

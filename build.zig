@@ -5,6 +5,7 @@ pub fn build(b: *std.Build) void {
     const optimize = b.standardOptimizeOption(.{});
 
     const enable_secure_mode = b.option(bool, "secure", "Use full security mitigations (like guard pages, allocation randomization, double-free mitigation, and free-list corruption detection)") orelse false;
+    const enable_valgrind = b.option(bool, "valgrind", "Compile with Valgrind support (adds a small overhead)") orelse false;
 
     const mimalloc_mod = b.addModule("mimalloc", .{
         .source_file = .{ .path = "src/mimalloc.zig" },
@@ -21,6 +22,9 @@ pub fn build(b: *std.Build) void {
     lib.installHeader("c_src/mimalloc/include/mimalloc.h", "mimalloc.h");
     if (enable_secure_mode) {
         lib.defineCMacro("MI_SECURE", "4");
+    }
+    if (enable_valgrind) {
+        lib.defineCMacro("MI_TRACK_VALGRIND", "1");
     }
     b.installArtifact(lib);
 
@@ -43,30 +47,34 @@ pub fn build(b: *std.Build) void {
         name: []const u8,
         src: []const u8,
     }{
-        .{ .name = "binary_trees_arena", .src = "benchs/binary_trees_arena.zig" },
-        .{ .name = "binary_trees_c", .src = "benchs/binary_trees_c.zig" },
-        .{ .name = "binary_trees_gpa", .src = "benchs/binary_trees_gpa.zig" },
-        .{ .name = "binary_trees_mimalloc", .src = "benchs/binary_trees_mimalloc.zig" },
+        .{ .name = "binary_trees_arena", .src = "examples/binary_trees_arena.zig" },
+        .{ .name = "binary_trees_c", .src = "examples/binary_trees_c.zig" },
+        .{ .name = "binary_trees_gpa", .src = "examples/binary_trees_gpa.zig" },
+        .{ .name = "binary_trees_mimalloc", .src = "examples/binary_trees_mimalloc.zig" },
+        .{ .name = "test_wrong", .src = "examples/test_wrong.zig" },
     }) |config| {
         const step_name = std.fmt.allocPrint(b.allocator, "run-{s}", .{config.name}) catch unreachable;
-        const step_desc = std.fmt.allocPrint(b.allocator, "Run the {s} bench", .{config.name}) catch unreachable;
+        const step_desc = std.fmt.allocPrint(b.allocator, "Run the {s} example", .{config.name}) catch unreachable;
 
-        const bench = b.addExecutable(.{
+        const example = b.addExecutable(.{
             .name = config.name,
             .root_source_file = .{ .path = config.src },
             .target = target,
             .optimize = optimize,
         });
 
-        bench.linkLibrary(lib);
-        bench.addModule("mimalloc", mimalloc_mod);
+        example.linkLibrary(lib);
+        example.addModule("mimalloc", mimalloc_mod);
 
-        const run_cmd = b.addRunArtifact(bench);
+        const run_cmd = b.addRunArtifact(example);
         if (b.args) |args| {
             run_cmd.addArgs(args);
         }
 
         const run_step = b.step(step_name, step_desc);
         run_step.dependOn(&run_cmd.step);
+
+        b.allocator.free(step_name);
+        b.allocator.free(step_desc);
     }
 }

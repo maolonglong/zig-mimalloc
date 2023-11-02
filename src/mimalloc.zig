@@ -67,12 +67,41 @@ pub const Heap = struct {
         };
     }
 
+    pub fn default() !Self {
+        return .{
+            .inner = raw.mi_heap_get_default() orelse return error.OutOfMemory,
+        };
+    }
+
+    pub fn setDefault(self: *Self) ?Heap {
+        const prev = raw.mi_heap_set_default(self.inner) orelse return null;
+        return .{
+            .inner = prev,
+        };
+    }
+
+    pub fn backing() !Heap {
+        return .{
+            .inner = raw.mi_heap_get_backing() orelse return error.OutOfMemory,
+        };
+    }
+
     pub fn delete(self: *Self) void {
         raw.mi_heap_delete(self.inner);
+        self.* = undefined;
     }
 
     pub fn destroy(self: *Self) void {
         raw.mi_heap_destroy(self.inner);
+        self.* = undefined;
+    }
+
+    pub fn collect(self: *Self, force: bool) void {
+        raw.mi_heap_collect(self.inner, force);
+    }
+
+    pub fn checkOwned(self: *Self, p: ?*anyopaque) bool {
+        return raw.mi_heap_check_owned(self.inner, p);
     }
 
     pub fn allocator(self: *Self) Allocator {
@@ -117,4 +146,37 @@ test "heap allocator" {
     try std.heap.testAllocatorAligned(allocator);
     try std.heap.testAllocatorLargeAlignment(allocator);
     try std.heap.testAllocatorAlignedShrink(allocator);
+}
+
+test "delete" {
+    var heap = try Heap.new();
+    var backing = try Heap.backing();
+
+    var slice = try heap.allocator().alloc(u8, 1);
+
+    try testing.expect(heap.checkOwned(slice.ptr));
+    try testing.expect(!backing.checkOwned(slice.ptr));
+
+    heap.delete();
+    try testing.expect(backing.checkOwned(slice.ptr));
+    backing.allocator().free(slice);
+}
+
+test "default" {
+    var default = try Heap.default();
+    var backing = try Heap.backing();
+    try testing.expectEqual(@intFromPtr(backing.inner), @intFromPtr(default.inner));
+
+    var heap = try Heap.new();
+    defer heap.destroy();
+    var prev = heap.setDefault().?;
+    try testing.expectEqual(@intFromPtr(backing.inner), @intFromPtr(prev.inner));
+    var default2 = try Heap.default();
+    try testing.expectEqual(@intFromPtr(heap.inner), @intFromPtr(default2.inner));
+    try testing.expect(@intFromPtr(backing.inner) != @intFromPtr(default2.inner));
+
+    var heap2 = try Heap.new();
+    defer heap2.destroy();
+    var prev2 = heap2.setDefault().?;
+    try testing.expectEqual(@intFromPtr(heap.inner), @intFromPtr(prev2.inner));
 }

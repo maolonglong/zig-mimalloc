@@ -17,9 +17,9 @@ pub fn build(b: *std.Build) void {
         .optimize = optimize,
         .link_libc = true,
     });
-    lib.addIncludePath(.{ .path = "c_src/mimalloc/include" });
-    lib.addCSourceFile(.{ .file = .{ .path = "c_src/mimalloc/src/static.c" }, .flags = &.{} });
-    lib.installHeader("c_src/mimalloc/include/mimalloc.h", "mimalloc.h");
+    lib.addIncludePath(.{ .path = "src/mimalloc-2.1.2/include" });
+    lib.addCSourceFile(.{ .file = .{ .path = "src/mimalloc-2.1.2/src/static.c" }, .flags = &.{} });
+    lib.installHeader("src/mimalloc-2.1.2/include/mimalloc.h", "mimalloc.h");
     if (enable_secure_mode) {
         lib.defineCMacro("MI_SECURE", "4");
     }
@@ -38,7 +38,7 @@ pub fn build(b: *std.Build) void {
     const test_step = b.step("test", "Run library tests");
     test_step.dependOn(&run_main_tests.step);
 
-    const kcov = b.addSystemCommand(&.{ "kcov", "--clean", "--include-pattern=src/", "--exclude-pattern=c_src/", "kcov-output" });
+    const kcov = b.addSystemCommand(&.{ "kcov", "--clean", "--include-pattern=src/", "--exclude-pattern=src/mimalloc-2.1.2/", "kcov-output" });
     kcov.addArtifactArg(main_tests);
     const kcov_step = b.step("kcov", "Generate code coverage report");
     kcov_step.dependOn(&kcov.step);
